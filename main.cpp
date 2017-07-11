@@ -14,59 +14,68 @@ struct foo
     char a_str[256];
 };
 
+
 int main( int, const char** )
 {
 #if 1
     std::atomic_int atomic_i( 0 );
     std::atomic_bool work( true );
 
-    int b = 32;
+    int value( 0 );
 
     std::thread t0( [&]() {
         while ( work )
         {
-            int p = 0;
-            
-            if( ( p = atomic_i.load( std::memory_order_acquire ) ) < 2 )
-                continue;
+            int expected = 0;
 
-            assert( b == 56 );
+            if ( !atomic_i.compare_exchange_strong( expected, 1,
+                                                    std::memory_order_acq_rel ) )
+                continue;
+            
+            value = 1;
+            value = 2;
+            value = 3;
+
+            atomic_i.store( 0, std::memory_order_release );
         }
     } );
-    
+
     std::thread t1( [&]() {
         while ( work )
         {
-            int p = 0;
-            
-            if( ( p = atomic_i.load( std::memory_order_acquire ) ) < 2 )
+            int expected = 0;
+
+            if ( !atomic_i.compare_exchange_strong( expected, 1,
+                                                    std::memory_order_acq_rel ) )
                 continue;
 
-            assert( b == 56 );
+            value = 5;
+            value = 6;
+            value = 7;
+
+            atomic_i.store( 0, std::memory_order_release );
         }
     } );
 
-    std::thread t2( [&]() {
-        // std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) );
-        while ( work )
-        {
-            int expected = 1;
-            if ( !atomic_i.compare_exchange_strong( expected, 2,
-                                                       std::memory_order_acq_rel ) )
-            {
-                continue;
-            }
-            b = 56;
-        }
-    } );
 
     std::thread t3( [&]() {
         // std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) );
-        
+
         while ( work )
         {
-            b = 52;
-            atomic_i.store( 1, std::memory_order_release );
+#if 1
+            int expected = 0;
+
+            if ( !atomic_i.compare_exchange_strong( expected, 1,
+                                                    std::memory_order_acq_rel ) )
+                continue;
+#endif
+            //value.fetch_sub( value.load( std::memory_order_acquire ),
+            //                 std::memory_order_release );
+            std::cout << value << std::endl;
+#if 1
+            atomic_i.store( 0, std::memory_order_release );
+#endif
         }
     } );
 
@@ -76,7 +85,6 @@ int main( int, const char** )
 
     t0.join();
     t1.join();
-    t2.join();
     t3.join();
 #endif
 #if 0 
